@@ -21,9 +21,11 @@ import re
 import requests
 import unittest
 from six.moves import http_client
-
 from google.oauth2.service_account import Credentials
 from . import _read_local_json
+import functools
+
+from google.cloud.storage._opentelemetry_meter import telemetry_wrapped_api_request
 
 _SERVICE_ACCOUNT_JSON = _read_local_json("url_signer_v4_test_account.json")
 _CONFORMANCE_TESTS = _read_local_json("url_signer_v4_test_data.json")[
@@ -250,7 +252,10 @@ class TestClient(unittest.TestCase):
         CREDENTIALS = _make_credentials()
         client = self._make_one(project=PROJECT, credentials=CREDENTIALS)
         client._base_connection = None  # Unset the value from the constructor
-        client._connection = connection = object()
+        client._connection = connection = _make_connection()
+        connection.api_request = functools.partial(
+            telemetry_wrapped_api_request, connection.api_request
+        )
         self.assertIs(client._base_connection, connection)
 
     def test__connection_setter_when_set(self):
@@ -277,6 +282,7 @@ class TestClient(unittest.TestCase):
         self.assertIsNot(client._connection, client._base_connection)
         self.assertIs(client._connection, batch)
         self.assertIs(client.current_batch, batch)
+        self.assertIsInstance(client.current_batch.api_request, functools.partial)
 
     def test_get_service_account_email_wo_project(self):
         PROJECT = "PROJECT"
@@ -678,8 +684,9 @@ class TestClient(unittest.TestCase):
         credentials = _make_credentials()
         client = self._make_one(project=project, credentials=credentials)
         connection = _make_connection()
-        client._base_connection = connection
         connection.api_request.side_effect = Conflict("testing")
+        client._base_connection = None
+        client._connection = connection
 
         bucket_name = "bucket-name"
         data = {"name": bucket_name}
@@ -689,7 +696,7 @@ class TestClient(unittest.TestCase):
                 bucket_name, project=other_project, user_project=user_project
             )
 
-        connection.api_request.assert_called_once_with(
+        connection.api_request.args[0].assert_called_once_with(
             method="POST",
             path="/b",
             query_params={"project": other_project, "userProject": user_project},
@@ -753,12 +760,13 @@ class TestClient(unittest.TestCase):
         credentials = _make_credentials()
         client = self._make_one(project=project, credentials=credentials)
         connection = _make_connection(data)
-        client._base_connection = connection
+        client._base_connection = None
+        client._connection = connection
         bucket = client.create_bucket(
             bucket_name, predefined_acl="publicRead", timeout=42
         )
 
-        connection.api_request.assert_called_once_with(
+        connection.api_request.args[0].assert_called_once_with(
             method="POST",
             path="/b",
             query_params={"project": project, "predefinedAcl": "publicRead"},
@@ -785,12 +793,13 @@ class TestClient(unittest.TestCase):
         credentials = _make_credentials()
         client = self._make_one(project=project, credentials=credentials)
         connection = _make_connection(data)
-        client._base_connection = connection
+        client._base_connection = None
+        client._connection = connection
         bucket = client.create_bucket(
             bucket_name, predefined_default_object_acl="publicRead"
         )
 
-        connection.api_request.assert_called_once_with(
+        connection.api_request.args[0].assert_called_once_with(
             method="POST",
             path="/b",
             query_params={
@@ -814,11 +823,12 @@ class TestClient(unittest.TestCase):
 
         credentials = _make_credentials()
         client = self._make_one(project=project, credentials=credentials)
-        client._base_connection = connection
+        client._base_connection = None
+        client._connection = connection
 
         bucket = client.create_bucket(bucket_name, location=location)
 
-        connection.api_request.assert_called_once_with(
+        connection.api_request.args[0].assert_called_once_with(
             method="POST",
             path="/b",
             data=data,
@@ -838,10 +848,11 @@ class TestClient(unittest.TestCase):
         connection = _make_connection(DATA)
 
         client = Client(project=PROJECT)
-        client._base_connection = connection
+        client._base_connection = None
+        client._connection = connection
 
         bucket = client.create_bucket(BUCKET_NAME, project=OTHER_PROJECT)
-        connection.api_request.assert_called_once_with(
+        connection.api_request.args[0].assert_called_once_with(
             method="POST",
             path="/b",
             query_params={"project": OTHER_PROJECT},
@@ -881,7 +892,8 @@ class TestClient(unittest.TestCase):
 
         connection = _make_connection(DATA)
         client = Client(project=PROJECT)
-        client._base_connection = connection
+        client._base_connection = None
+        client._connection = connection
 
         bucket = Bucket(client=client, name=BUCKET_NAME)
         bucket.cors = CORS
@@ -892,7 +904,7 @@ class TestClient(unittest.TestCase):
         bucket.labels = LABELS
         client.create_bucket(bucket, location=LOCATION)
 
-        connection.api_request.assert_called_once_with(
+        connection.api_request.args[0].assert_called_once_with(
             method="POST",
             path="/b",
             query_params={"project": PROJECT},
@@ -909,11 +921,12 @@ class TestClient(unittest.TestCase):
         DATA = {"name": BUCKET_NAME}
         connection = _make_connection(DATA)
         client = Client(project=PROJECT)
-        client._base_connection = connection
+        client._base_connection = None
+        client._connection = connection
 
         bucket = client.create_bucket(BUCKET_NAME)
 
-        connection.api_request.assert_called_once_with(
+        connection.api_request.args[0].assert_called_once_with(
             method="POST",
             path="/b",
             query_params={"project": PROJECT},
@@ -1038,6 +1051,9 @@ class TestClient(unittest.TestCase):
         credentials = _make_credentials()
         client = self._make_one(project="PROJECT", credentials=credentials)
         connection = _make_connection({"items": []})
+        connection.api_request = functools.partial(
+            telemetry_wrapped_api_request, connection.api_request
+        )
 
         with mock.patch(
             "google.cloud.storage.client.Client._connection",
@@ -1050,7 +1066,7 @@ class TestClient(unittest.TestCase):
             blobs = list(iterator)
 
             self.assertEqual(blobs, [])
-            connection.api_request.assert_called_once_with(
+            connection.api_request.args[0].assert_called_once_with(
                 method="GET",
                 path="/b/%s/o" % BUCKET_NAME,
                 query_params={"projection": "noAcl"},
@@ -1089,6 +1105,9 @@ class TestClient(unittest.TestCase):
         credentials = _make_credentials()
         client = self._make_one(project=USER_PROJECT, credentials=credentials)
         connection = _make_connection({"items": []})
+        connection.api_request = functools.partial(
+            telemetry_wrapped_api_request, connection.api_request
+        )
 
         with mock.patch(
             "google.cloud.storage.client.Client._connection",
@@ -1114,7 +1133,7 @@ class TestClient(unittest.TestCase):
             blobs = list(iterator)
 
             self.assertEqual(blobs, [])
-            connection.api_request.assert_called_once_with(
+            connection.api_request.args[0].assert_called_once_with(
                 method="GET",
                 path="/b/%s/o" % BUCKET_NAME,
                 query_params=EXPECTED,
