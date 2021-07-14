@@ -615,14 +615,7 @@ def _delete_retry_test(host, id):
 ########################################################################################################################################
 
 
-_SECTION_RUN_CONFORMANCE_TESTS_TRIGGERED = False
-
-
-@pytest.mark.skipif(
-    not _SECTION_RUN_CONFORMANCE_TESTS_TRIGGERED,
-    reason="Retry test cases are only run through section Run Conformance Tests for Retry Strategy",
-)
-def test_retry_case(scenario_id, method, case, lib_func, host, resource_fixtures):
+def run_test_case(scenario_id, method, case, lib_func, host, resource_fixtures):
     scenario = _CONFORMANCE_TESTS[scenario_id - 1]
     expect_success = scenario["expectSuccess"]
     precondition_provided = scenario["preconditionProvided"]
@@ -680,7 +673,6 @@ for scenario in _CONFORMANCE_TESTS:
         )
         break
 
-    _SECTION_RUN_CONFORMANCE_TESTS_TRIGGERED = True
     id = scenario["id"]
     methods = scenario["methods"]
     cases = scenario["cases"]
@@ -694,5 +686,5 @@ for scenario in _CONFORMANCE_TESTS:
             for lib_func in method_mapping[method_name]:
                 test_name = "test-S{}-{}-{}".format(id, method_name, lib_func.__name__)
                 globals()[test_name] = functools.partial(
-                    test_retry_case, id, m, c, lib_func, host
+                    run_test_case, id, m, c, lib_func, host
                 )

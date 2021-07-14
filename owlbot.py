@@ -41,4 +41,13 @@ s.move(
     templated_files, excludes=["docs/multiprocessing.rst", "noxfile.py", "CONTRIBUTING.rst"],
 )
 
+s.replace(
+    "google/cloud/python-storage/noxfile.py",
+    r"UNIT_TEST_PYTHON_VERSIONS = \["2\.7", "3\.6", "3\.7", "3\.8", "3\.9"\]",
+    """\
+        UNIT_TEST_PYTHON_VERSIONS = ["2.7", "3.6", "3.7", "3.8", "3.9"]
+        CONFORMANCE_TEST_PYTHON_VERSIONS = ["3.8"]
+    """
+)
+
 s.shell.run(["nox", "-s", "blacken"], hide_output=False)
