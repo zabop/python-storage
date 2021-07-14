@@ -515,7 +515,7 @@ def bucket(client):
 
 
 @pytest.fixture
-def blob(client, bucket):
+def object(client, bucket):
     bucket = client.get_bucket(bucket.name)
     blob = bucket.blob(uuid.uuid4().hex)
     blob.upload_from_string("hello world", checksum="crc32c")
@@ -555,17 +555,6 @@ def hmac_key(client):
         pass
 
 
-@pytest.fixture
-def resource_fixtures(bucket, blob, notification, hmac_key):
-    resource_fixtures = {}
-    resource_fixtures["bucket"] = bucket
-    resource_fixtures["object"] = blob
-    resource_fixtures["notification"] = notification
-    resource_fixtures["hmac_key"] = hmac_key
-    yield resource_fixtures
-    resource_fixtures.clear()
-
-
 ########################################################################################################################################
 ### Helper Methods for Emulator Retry API ##############################################################################################
 ########################################################################################################################################
@@ -595,14 +584,23 @@ def _get_retry_test(host, id):
     return r.json()
 
 
-def _run_retry_test(host, id, func, _preconditions, **resources):
+def _run_retry_test(
+    host, id, lib_func, _preconditions, bucket, object, notification, hmac_key
+):
     """
     To execute tests against the list of instrucions sent to the Retry API, create a client to send the retry test ID using the x-retry-test-id header in each request.
     For incoming requests which match the given API method, the emulator will pop off the next instruction from the list and force the listed failure case.
     """
     client = storage.Client(client_options={"api_endpoint": host})
     client._http.headers.update({"x-retry-test-id": id})
-    func(client, _preconditions, **resources)
+    lib_func(
+        client,
+        _preconditions,
+        bucket=bucket,
+        object=object,
+        notification=notification,
+        hmac_key=hmac_key,
+    )
 
 
 def _delete_retry_test(host, id):
@@ -615,7 +613,9 @@ def _delete_retry_test(host, id):
 ########################################################################################################################################
 
 
-def run_test_case(scenario_id, method, case, lib_func, host, resource_fixtures):
+def run_test_case(
+    scenario_id, method, case, lib_func, host, bucket, object, notification, hmac_key
+):
     scenario = _CONFORMANCE_TESTS[scenario_id - 1]
     expect_success = scenario["expectSuccess"]
     precondition_provided = scenario["preconditionProvided"]
@@ -632,7 +632,16 @@ def run_test_case(scenario_id, method, case, lib_func, host, resource_fixtures):
 
     # Run retry tests on library methods.
     try:
-        _run_retry_test(host, id, lib_func, precondition_provided, **resource_fixtures)
+        _run_retry_test(
+            host,
+            id,
+            lib_func,
+            precondition_provided,
+            bucket,
+            object,
+            notification,
+            hmac_key,
+        )
     except Exception as e:
         logging.exception(
             "Caught an exception while running retry instructions\n {}".format(e)
