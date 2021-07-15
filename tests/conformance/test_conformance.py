@@ -555,6 +555,19 @@ def hmac_key(client):
         pass
 
 
+def filter_needed_resources_kwargs(json_resources):
+    needed_resources = {
+        "bucket": None,
+        "object": None,
+        "notification": None,
+        "hmac_key": None,
+    }
+    for resource in json_resources:
+        del needed_resources[resource.lower()]
+
+    return needed_resources
+
+
 ########################################################################################################################################
 ### Helper Methods for Emulator Retry API ##############################################################################################
 ########################################################################################################################################
@@ -688,6 +701,8 @@ for scenario in _CONFORMANCE_TESTS:
     for c in cases:
         for m in methods:
             method_name = m["name"]
+            json_resources = m["resources"]
+            resources = filter_needed_resources_kwargs(json_resources)
             if method_name not in method_mapping:
                 logging.info("No tests for operation {}".format(method_name))
                 continue
@@ -695,5 +710,5 @@ for scenario in _CONFORMANCE_TESTS:
             for lib_func in method_mapping[method_name]:
                 test_name = "test-S{}-{}-{}".format(id, method_name, lib_func.__name__)
                 globals()[test_name] = functools.partial(
-                    run_test_case, id, m, c, lib_func, host
+                    run_test_case, id, m, c, lib_func, host, **resources
                 )
