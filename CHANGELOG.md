@@ -4,6 +4,13 @@
 
 [1]: https://pypi.org/project/google-cloud-storage/#history
 
+## [2.4.0](https://github.com/googleapis/python-storage/compare/v2.3.0...v2.4.0) (2022-05-12)
+
+
+### Features
+
+* add AbortIncompleteMultipartUpload lifecycle rule ([#765](https://github.com/googleapis/python-storage/issues/765)) ([b2e5150](https://github.com/googleapis/python-storage/commit/b2e5150f191c04acb47ad98cef88512451aff81d))
+
 ## [2.3.0](https://github.com/googleapis/python-storage/compare/v2.2.1...v2.3.0) (2022-04-12)
 
 
